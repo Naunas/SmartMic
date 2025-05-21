@@ -1,0 +1,18 @@
+{
+  "name": "smart-mic-ai",
+  "version": "1.0.0",
+  "description": "Landing page for Smart Mic AI - AI-powered transcription and query tool.",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "live-server src --open=src/index.html",
+    "lint:js": "eslint src/**/*.js",
+    "format": "prettier --write src/**/*.{js,css,html}"
+  },
+  "devDependencies": {
+    "live-server": "^1.2.2",
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.5"
+  },
+  "author": "",
+  "license": "MIT"
+} 

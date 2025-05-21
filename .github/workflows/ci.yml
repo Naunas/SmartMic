@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '16'
+      - run: npm ci
+      - run: npm run lint:js
+      - run: npm run format -- --check
+
+      - name: Check for index.html
+        run: test -f src/index.html
+      - name: Run Prettier
+        run: |
+          if [ -f package.json ]; then
+            npx prettier --check "src/**/*.{js,css,html}"
+          fi
+      - name: Run ESLint
+        run: |
+          if [ -f package.json ]; then
+            npx eslint src/*.js || true
+          fi 
