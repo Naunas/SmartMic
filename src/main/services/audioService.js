@@ -6,6 +6,8 @@ class AudioService {
   constructor() {
     this.isRecording = false;
     this.recordingPath = null;
+    this.selectedDeviceId = null;
+    this.audioLevel = 0;
     this.ensureRecordingDirectory();
   }
 
@@ -17,19 +19,67 @@ class AudioService {
     }
   }
 
+  async getAudioDevices() {
+    try {
+      const devices = await mainWindow.webContents.executeJavaScript(`
+        navigator.mediaDevices.enumerateDevices()
+          .then(devices => devices.filter(device => device.kind === 'audioinput'))
+          .then(audioDevices => audioDevices.map(device => ({
+            deviceId: device.deviceId,
+            label: device.label || 'Microphone ' + (audioDevices.indexOf(device) + 1)
+          })))
+      `);
+      return { success: true, devices };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  async setAudioDevice(deviceId) {
+    this.selectedDeviceId = deviceId;
+    if (this.isRecording) {
+      await this.stopRecording();
+      await this.startRecording();
+    }
+    return { success: true };
+  }
+
   async startRecording(mainWindow) {
     if (this.isRecording) {
       return { success: false, error: 'Recording is already in progress' };
     }
 
     try {
+      const constraints = {
+        audio: this.selectedDeviceId ? { deviceId: this.selectedDeviceId } : true
+      };
+
       // Request microphone access through the renderer process
       await mainWindow.webContents.executeJavaScript(`
-        navigator.mediaDevices.getUserMedia({ audio: true })
+        navigator.mediaDevices.getUserMedia(${JSON.stringify(constraints)})
           .then(stream => {
             window.audioStream = stream;
             window.mediaRecorder = new MediaRecorder(stream);
             window.audioChunks = [];
+            
+            // Set up audio level monitoring
+            const audioContext = new AudioContext();
+            const source = audioContext.createMediaStreamSource(stream);
+            const analyser = audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            source.connect(analyser);
+            
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            
+            function updateAudioLevel() {
+              analyser.getByteFrequencyData(dataArray);
+              const average = dataArray.reduce((a, b) => a + b) / bufferLength;
+              window.electron.ipcRenderer.send('audio-level-update', average);
+              if (window.mediaRecorder.state === 'recording') {
+                requestAnimationFrame(updateAudioLevel);
+              }
+            }
             
             window.mediaRecorder.ondataavailable = (event) => {
               if (event.data.size > 0) {
@@ -44,6 +94,7 @@ class AudioService {
             };
 
             window.mediaRecorder.start();
+            updateAudioLevel();
             return true;
           })
           .catch(error => {
@@ -116,8 +167,14 @@ class AudioService {
   getRecordingStatus() {
     return {
       isRecording: this.isRecording,
-      recordingPath: this.recordingPath
+      recordingPath: this.recordingPath,
+      selectedDeviceId: this.selectedDeviceId,
+      audioLevel: this.audioLevel
     };
+  }
+
+  updateAudioLevel(level) {
+    this.audioLevel = level;
   }
 }
 

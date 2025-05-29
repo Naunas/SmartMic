@@ -52,6 +52,14 @@ app.on('window-all-closed', () => {
 });
 
 // IPC handlers for audio processing
+ipcMain.handle('get-audio-devices', async () => {
+  return audioService.getAudioDevices();
+});
+
+ipcMain.handle('set-audio-device', async (event, deviceId) => {
+  return audioService.setAudioDevice(deviceId);
+});
+
 ipcMain.handle('start-recording', async () => {
   try {
     const result = await audioService.startRecording(mainWindow);
@@ -112,4 +120,10 @@ ipcMain.handle('process-query', async (event, query) => {
     success: false,
     error: 'Query processing not implemented yet'
   };
+});
+
+// Handle audio level updates
+ipcMain.on('audio-level-update', (event, level) => {
+  audioService.updateAudioLevel(level);
+  mainWindow.webContents.send('audio-level-updated', level);
 }); 

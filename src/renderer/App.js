@@ -7,10 +7,14 @@ function App() {
   const [response, setResponse] = useState('');
   const [recordingStatus, setRecordingStatus] = useState(null);
   const [error, setError] = useState(null);
+  const [audioDevices, setAudioDevices] = useState([]);
+  const [selectedDevice, setSelectedDevice] = useState('');
+  const [audioLevel, setAudioLevel] = useState(0);
 
   useEffect(() => {
     // Check initial recording status
     checkRecordingStatus();
+    loadAudioDevices();
 
     // Set up event listeners
     window.electron.ipcRenderer.on('recording-started', (data) => {
@@ -36,14 +40,46 @@ function App() {
       setError(data.error);
     });
 
+    window.electron.ipcRenderer.on('audio-level-updated', (level) => {
+      setAudioLevel(level);
+    });
+
     return () => {
       // Clean up event listeners
       window.electron.ipcRenderer.removeAllListeners('recording-started');
       window.electron.ipcRenderer.removeAllListeners('recording-stopped');
       window.electron.ipcRenderer.removeAllListeners('recording-saved');
       window.electron.ipcRenderer.removeAllListeners('recording-error');
+      window.electron.ipcRenderer.removeAllListeners('audio-level-updated');
     };
   }, []);
+
+  const loadAudioDevices = async () => {
+    try {
+      const result = await window.electron.ipcRenderer.invoke('get-audio-devices');
+      if (result.success) {
+        setAudioDevices(result.devices);
+        if (result.devices.length > 0) {
+          setSelectedDevice(result.devices[0].deviceId);
+        }
+      }
+    } catch (err) {
+      setError('Failed to load audio devices');
+    }
+  };
+
+  const handleDeviceChange = async (deviceId) => {
+    try {
+      const result = await window.electron.ipcRenderer.invoke('set-audio-device', deviceId);
+      if (result.success) {
+        setSelectedDevice(deviceId);
+      } else {
+        setError(result.error);
+      }
+    } catch (err) {
+      setError('Failed to change audio device');
+    }
+  };
 
   const checkRecordingStatus = async () => {
     const status = await window.electron.ipcRenderer.invoke('get-recording-status');
@@ -90,16 +126,29 @@ function App() {
       <header className="app-header">
         <div className="nav-container">
           <div className="nav-brand">Smart <span className="brand-accent">Mic AI</span></div>
-          <button 
-            className={`btn-primary record-button ${isRecording ? 'recording' : ''}`}
-            onClick={toggleRecording}
-          >
-            <svg className="mic-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-              <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-            </svg>
-            {isRecording ? 'Stop Recording' : 'Start Recording'}
-          </button>
+          <div className="audio-controls">
+            <select 
+              value={selectedDevice} 
+              onChange={(e) => handleDeviceChange(e.target.value)}
+              className="device-select"
+            >
+              {audioDevices.map(device => (
+                <option key={device.deviceId} value={device.deviceId}>
+                  {device.label}
+                </option>
+              ))}
+            </select>
+            <button 
+              className={`btn-primary record-button ${isRecording ? 'recording' : ''}`}
+              onClick={toggleRecording}
+            >
+              <svg className="mic-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+              </svg>
+              {isRecording ? 'Stop Recording' : 'Start Recording'}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -120,6 +169,14 @@ function App() {
               Real-Time
             </div>
           </div>
+          {isRecording && (
+            <div className="audio-level-meter">
+              <div 
+                className="audio-level-bar" 
+                style={{ width: `${(audioLevel / 255) * 100}%` }}
+              />
+            </div>
+          )}
           <div className="transcription-box">
             {transcription || 'Waiting for audio...'}
           </div>

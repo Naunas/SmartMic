@@ -13,7 +13,9 @@ contextBridge.exposeInMainWorld(
           'stop-recording',
           'get-recording-status',
           'process-audio',
-          'process-query'
+          'process-query',
+          'get-audio-devices',
+          'set-audio-device'
         ];
         if (validChannels.includes(channel)) {
           return ipcRenderer.invoke(channel, ...args);
@@ -26,7 +28,8 @@ contextBridge.exposeInMainWorld(
           'recording-started',
           'recording-stopped',
           'recording-saved',
-          'recording-error'
+          'recording-error',
+          'audio-level-updated'
         ];
         if (validChannels.includes(channel)) {
           // Deliberately strip event as it includes `sender` 
@@ -38,7 +41,8 @@ contextBridge.exposeInMainWorld(
           'recording-started',
           'recording-stopped',
           'recording-saved',
-          'recording-error'
+          'recording-error',
+          'audio-level-updated'
         ];
         if (validChannels.includes(channel)) {
           ipcRenderer.removeAllListeners(channel);
